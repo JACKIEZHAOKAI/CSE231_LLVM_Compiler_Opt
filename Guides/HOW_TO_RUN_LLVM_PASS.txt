@@ -1,0 +1,8 @@
+Instructions on running the provided LLVM pass (TestPass):
+
+ - Start the provided docker image by running "sudo ./mount_and_launch.sh"
+ - Follow the steps in "HOW_TO_COMPILE_LLVM_PASS.txt". DO NOT exit the running container.
+ - The environment is pre-configured so you can run the pass from any directory in the filesystem. 
+ - To run your pass: "opt -load LLVMTestPass.so -TestPass < /tests/HelloWorld/HelloWorld.ll > /dev/null"
+ - Our pass sends output to the "errs()" device (standard error). We can redirect the output by appending "2> <file-path> in the previous command.
+ - Done!

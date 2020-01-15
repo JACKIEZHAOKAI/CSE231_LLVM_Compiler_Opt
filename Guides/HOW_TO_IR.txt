@@ -1,0 +1,9 @@
+Instructions on generating LLVM IR code from source code (for test programs)
+
+ - Start the provided docker image by running "sudo ./mount_and_launch.sh"
+ - Your "tests" folder should be mounted at /tests within the container. Verify.
+ - Move into the tests folder: "cd /tests"
+ - cd into the folder with the test case you want to compile. For example: "cd HelloWorld"
+ - Compile IR code: "clang -S -emit-llvm HelloWorld.cpp"
+ - Done! You should be able to see a "HelloWorld.ll" file. 
+ - The file should be immediately available on your local (host) machine as well. You can exit the docker image without losing it.

@@ -1,0 +1,8 @@
+Instructions on compiling your own LLVM pass
+
+ - Start the provided docker image by running "sudo ./mount_and_launch.sh"
+ - Your "src" folder should be mounted at /LLVM_ROOT/llvm/lib/Transforms/CSE231_Project
+ - You only need to compile your new pass(es) so we'll move directly into the CSE231_Project build folder. To do that type "cd /LLVM_ROOT/build/lib/Transforms/CSE231_Project"
+ - Everything is pre-configures. You only need to run "make"
+ - If everything went well, you should be able to find your pass under /LLVM_ROOT/build/lib/
+ - Done!
