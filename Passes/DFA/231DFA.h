@@ -10,6 +10,19 @@
 // This file provides the interface for the passes of CSE 231 projects
 //
 //===----------------------------------------------------------------------===//
+/*	Part 2.1
+	Implement a generic intra-procedural dataflow analysis framework. 
+	We provide an incomplete base template class class DataFlowAnalysis in 231DFA.h. 
+	To create a dataflow analysis based on the base class DataFlowAnalysis, you need to provide:
+		class Info: the class that represents the information at each program point;
+		bool Direction: the direction of analysis. If it is true, then the analysis is a forward analysis; otherwise it is a backward analysis.
+		Info InitialState: the initial state of the analysis.
+		Info Bottom: the bottom of the lattice.
+
+	You need to implement class DataFlowAnalysis in 231DFA.h so that it performs a forward analysis. 
+	We provide most of the code for forward analysis in class DataFlowAnalysis. 
+	You only need to implement the worklist algorithm in function runWorklistAlgorithm.
+*/
 
 #ifndef LLVM_TRANSFORMS_231DFA_H
 #define LLVM_TRANSFORMS_231DFA_H
@@ -25,9 +38,9 @@
 #include <utility>
 #include <vector>
 
+using namespace std;
+
 namespace llvm {
-
-
 /*
  * This is the base class to represent information in a dataflow analysis.
  * For a specific analysis, you need to create a sublcass of it.
@@ -53,7 +66,8 @@ class Info {
      *   In your subclass you need to implement this function.
      */
     static bool equals(Info * info1, Info * info2);
-    /*
+    
+	/*
      * Join two pieces of information.
      * The third parameter points to the result.
      *
@@ -70,7 +84,7 @@ class Info {
 template <class Info, bool Direction>
 class DataFlowAnalysis {
 
-  private:
+    private:
 		typedef std::pair<unsigned, unsigned> Edge;
 		// Index to instruction map
 		std::map<unsigned, Instruction *> IndexToInstr;
@@ -79,12 +93,11 @@ class DataFlowAnalysis {
 		// Edge to information map
 		std::map<Edge, Info *> EdgeToInfo;
 		// The bottom of the lattice
-    Info Bottom;
-    // The initial state of the analysis
+		Info Bottom;
+		// The initial state of the analysis
 		Info InitialState;
 		// EntryInstr points to the first instruction to be processed in the analysis
 		Instruction * EntryInstr;
-
 
 		/*
 		 * Assign an index to each instruction.
@@ -215,10 +228,61 @@ class DataFlowAnalysis {
 		/*
 		 * Direction:
 		 *   Implement the following function in part 3 for backward analyses
+		 *
+		 *	Reuse code from initializeForwardMap() but changing direction of src and dst
+		 *  implement 
 		 */
 		void initializeBackwardMap(Function * func) {
+			assignIndiceToInstrs(func);
 
-		}
+            for (Function::iterator bi = func->begin(), e = func->end(); bi != e; ++bi) {
+                BasicBlock * block = &*bi;
+
+                Instruction * firstInstr = &(block->front());
+
+                // Initialize incoming edges to the basic block
+                for (auto pi = pred_begin(block), pe = pred_end(block); pi != pe; ++pi) {
+                    BasicBlock * prev = *pi;
+                    Instruction * src = firstInstr;
+                    Instruction * dst = (Instruction *)prev->getTerminator();
+                    addEdge(src, dst, &Bottom);
+                }
+
+                // If there is at least one phi node, add an edge from the first phi node
+                // to the first non-phi node instruction in the basic block.
+                if (isa<PHINode>(firstInstr)) {
+                    addEdge(block->getFirstNonPHI(), firstInstr,  &Bottom);
+                }
+
+                // Initialize edges within the basic block
+                for (auto ii = block->begin(), ie = block->end(); ii != ie; ++ii) {
+                    Instruction * instr = &*ii;
+                    if (isa<PHINode>(instr))
+                        continue;
+                    if (instr == (Instruction *)block->getTerminator())
+                        break;
+                    Instruction * next = instr->getNextNode();
+                    addEdge(next, instr, &Bottom);
+                }
+
+                // Initialize outgoing edges of the basic block
+                Instruction * term = (Instruction *)block->getTerminator();
+                for (auto si = succ_begin(block), se = succ_end(block); si != se; ++si) {
+                    BasicBlock * succ = *si;
+                    Instruction * next = &(succ->front());
+                    addEdge(next, term, &Bottom);
+                }
+
+                // multi ret operator
+                Instruction * ProbableEntryInstr = (Instruction *) &(block->back());
+                if((std::string) (ProbableEntryInstr->getOpcodeName()) == "ret"){
+                    addEdge(nullptr, ProbableEntryInstr, &InitialState);
+                }
+            }
+
+            EntryInstr = (Instruction *) &((func->back()).back());
+            return;
+        }
 
     /*
      * The flow function.
@@ -230,10 +294,8 @@ class DataFlowAnalysis {
      * Direction:
      * 	 Implement this function in subclasses.
      */
-    virtual void flowfunction(Instruction * I,
-    													std::vector<unsigned> & IncomingEdges,
-															std::vector<unsigned> & OutgoingEdges,
-															std::vector<Info *> & Infos) = 0;
+    virtual void flowfunction(	Instruction * I, std::vector<unsigned> & IncomingEdges,
+								std::vector<unsigned> & OutgoingEdges, std::vector<Info *> & Infos) = 0;
 
   public:
     DataFlowAnalysis(Info & bottom, Info & initialState) :
@@ -241,6 +303,25 @@ class DataFlowAnalysis {
 
     virtual ~DataFlowAnalysis() {}
 
+	//############################################################
+	// getter methods
+	//############################################################
+	unsigned getIndexFromInstr(Instruction* I){
+		return this->InstrToIndex[I];
+	}
+
+	Info* getInfoFromEdge(Edge edge){
+		return this->EdgeToInfo[edge];
+	}
+
+	unsigned countInstructions(Instruction* I){
+		return this->InstrToIndex.count(I);
+	}
+
+	Instruction* getInstrFromIndex(unsigned index){
+		return this->IndexToInstr[index];
+	}
+	
     /*
      * Print out the analysis results.
      *
@@ -249,10 +330,10 @@ class DataFlowAnalysis {
      * 	 The autograder will check the output of this function.
      */
     void print() {
-			for (auto const &it : EdgeToInfo) {
-				errs() << "Edge " << it.first.first << "->" "Edge " << it.first.second << ":";
-				(it.second)->print();
-			}
+		for (auto const &it : EdgeToInfo) {
+			errs() << "Edge " << it.first.first << "->" "Edge " << it.first.second << ":";
+			(it.second)->print();
+		}
     }
 
     /*
@@ -265,24 +346,72 @@ class DataFlowAnalysis {
      *   Implement the rest of the function.
      *   You may not change anything before "// (2) Initialize the worklist".
      */
-    void runWorklistAlgorithm(Function * func) {
-    	std::deque<unsigned> worklist;
+	void runWorklistAlgorithm(Function * func) {
+        std::deque<unsigned> worklist;
+      
+	    // (1) Initialize info of each edge to bottom
+        if (Direction)
+            initializeForwardMap(func);
+        else
+            initializeBackwardMap(func);
 
-    	// (1) Initialize info of each edge to bottom
-    	if (Direction)
-    		initializeForwardMap(func);
-    	else
-    		initializeBackwardMap(func);
+        assert(EntryInstr != nullptr && "Entry instruction is null.");
 
-    	assert(EntryInstr != nullptr && "Entry instruction is null.");
+        // (2) Initialize the work list
+        for (auto iter = IndexToInstr.begin(); iter != IndexToInstr.end(); ++iter){
+            if(iter->first==0){
+                continue;
+            }
+			worklist.push_back(iter->first);
+        }
+		
+        // (3) Compute until the work list is empty
+        while (!worklist.empty()) {
 
-    	// (2) Initialize the work list
+			// remove any from the worklist
+            unsigned index = worklist.front();
+            worklist.pop_front();
+            Instruction *I = IndexToInstr[index];
 
-    	// (3) Compute until the work list is empty
+			// get incomingEdges and outgoingEdges
+            std::vector<unsigned> incomingEdges, outgoingEdges;
+			getIncomingEdges(index, &incomingEdges);
+            getOutgoingEdges(index, &outgoingEdges);
+
+            std::vector<Info *> info_out;
+            for(unsigned i=0; i<outgoingEdges.size();i++){
+                info_out.push_back(new Info());
+            }
+           
+		    flowfunction(I, incomingEdges, outgoingEdges, info_out);
+        
+		    for(unsigned i=0;i<info_out.size();i++){
+                unsigned start = index, end = outgoingEdges[i];
+                Edge edge = std::make_pair(start, end);
+                Info * newInfo = new Info();
+                
+                Info::join(EdgeToInfo[edge], info_out[i], newInfo);	//Debug fixed  join(info1, info2, res)
+
+                if(!Info::equals(newInfo,EdgeToInfo[edge])){
+                    if (EdgeToInfo[edge] != &Bottom) { 
+                        delete EdgeToInfo[edge];
+                    }
+					//update EdgeToInfo map and  worklist 
+                    EdgeToInfo[edge] = newInfo;
+                    worklist.push_back(end);
+                } else {
+					// no need to replace anything
+                    delete newInfo;
+                }
+            }
+			
+            for(unsigned i=0; i<outgoingEdges.size();i++){
+                delete info_out[i];
+            }
+        }
     }
+
 };
-
-
 
 }
 #endif // End LLVM_231DFA_H

@@ -66,7 +66,7 @@ namespace {
             // If taken is false, then a conditional branch is not taken.
             FunctionCallee updateFunc = module->getOrInsertFunction("updateBranchInfo", 
                                         Type::getVoidTy(context), 
-                                        Type::getInt1Ty(context)    // taken
+                                        Type::getInt1Ty(context) 
                                         );
             //void printOutBranchInfo()
             FunctionCallee printFunc = module->getOrInsertFunction("printOutBranchInfo", 
